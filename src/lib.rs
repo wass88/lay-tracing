@@ -4,15 +4,17 @@ extern crate rand;
 mod math_util;
 use math_util::*;
 
+pub use math_util::rand;
+pub use math_util::rand_v3;
+pub use math_util::PI;
+pub use math_util::V3;
+
 type Point = V3;
 type Color = V3;
 use std::rc::Rc;
 
-pub struct World {
-    objects: GeomList,
-    camera: Camera,
-}
-struct Camera {
+#[derive(Debug)]
+pub struct Camera {
     pos: Point,
     lower_left: Point,
     horizontal: V3,
@@ -23,7 +25,7 @@ struct Camera {
     lens_radius: f64,
 }
 impl Camera {
-    fn new(
+    pub fn new(
         look_from: Point,
         look_at: Point,
         up: V3,
@@ -65,6 +67,10 @@ impl Camera {
         }
     }
 }
+pub struct World {
+    objects: GeomList,
+    camera: Camera,
+}
 pub struct RenderOption {
     pub campus_width: u32,
     pub campus_height: u32,
@@ -72,42 +78,17 @@ pub struct RenderOption {
     pub samples: usize,
 }
 impl World {
-    pub fn new() -> World {
-        let material_ground = Rc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
-        let material_left = Rc::new(Glass { ir: 2.0 });
-        let material_center = Rc::new(Glass { ir: 10.0 });
-        let material_right = Rc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
-
-        let geom_ground = Box::new(Sphere {
-            pos: V3(0., -10. - 0.4, -1.),
-            radius: -10.,
-            material: material_ground,
-        });
-        let geom_left =
-            Box::new(Sphere { pos: V3(0.8, 0., -1.), radius: 0.4, material: material_left });
-        let geom_center =
-            Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4, material: material_center });
-        let geom_right =
-            Box::new(Sphere { pos: V3(-0.8, 0., -1.), radius: 0.4, material: material_right });
-        let objects = GeomList { geoms: vec![geom_left, geom_center, geom_right, geom_ground] };
-        /*vec![Geom::Plain {
-            origin: V3(0., 0., 0.),
-            x: V3(1., 0., 0.),
-            y: V3(0., 1., 0.),
-            color: V3(0., 1., 0.),
-        }]*/
-        let look_from = V3(1.2, 0.9, 0.7);
-        let look_at = V3(0., 0., -1.);
-        let up = V3(0., -1., 0.);
-        let focus_dist = (look_from - look_at).len();
-        let aperture = 0.8;
-        let camera = Camera::new(look_from, look_at, up, 0.3 * PI, 16. / 9., aperture, focus_dist);
-        World { objects, camera }
+    pub fn new(camera: Camera) -> World {
+        World { objects: GeomList { geoms: vec![] }, camera }
+    }
+    pub fn add(&mut self, geom: Box<dyn Geom>) {
+        self.objects.add(geom)
     }
     pub fn render(&self, option: RenderOption) -> image::RgbImage {
         let mut buf = image::RgbImage::new(option.campus_width, option.campus_height);
 
         for x in 0..option.campus_width {
+            eprint! {"\rLine: {} / {}", x, option.campus_width};
             for y in 0..option.campus_height {
                 let mut total_color = V3(0., 0., 0.);
                 for _ in 0..option.samples {
@@ -150,7 +131,7 @@ impl World {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Ray {
+pub struct Ray {
     pos: Point,
     way: V3,
 }
@@ -161,7 +142,7 @@ impl Ray {
 }
 
 #[derive(Debug, Clone)]
-struct HitRecord {
+pub struct HitRecord {
     pos: Point,
     normal: V3,
     distance: f64,
@@ -182,12 +163,12 @@ impl HitRecord {
     }
 }
 
-trait Geom: std::fmt::Debug {
+pub trait Geom: std::fmt::Debug {
     fn hit(&self, ray: Ray, d_min: f64, d_max: f64) -> Option<HitRecord>;
 }
 
 #[derive(Debug)]
-struct GeomList {
+pub struct GeomList {
     geoms: Vec<Box<dyn Geom>>,
 }
 impl Geom for GeomList {
@@ -204,19 +185,19 @@ impl Geom for GeomList {
     }
 }
 impl GeomList {
-    fn add(&mut self, geom: Box<dyn Geom>) {
+    pub fn add(&mut self, geom: Box<dyn Geom>) {
         self.geoms.push(geom)
     }
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.geoms.clear()
     }
 }
 
 #[derive(Debug, Clone)]
-struct Sphere {
-    pos: Point,
-    radius: f64,
-    material: Rc<dyn Material>,
+pub struct Sphere {
+    pub pos: Point,
+    pub radius: f64,
+    pub material: Rc<dyn Material>,
 }
 impl Geom for Sphere {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
@@ -244,13 +225,13 @@ impl Geom for Sphere {
     }
 }
 
-trait Material: std::fmt::Debug {
+pub trait Material: std::fmt::Debug {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>);
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Lambertian {
-    color: Color,
+pub struct Lambertian {
+    pub color: Color,
 }
 impl Material for Lambertian {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
@@ -264,11 +245,10 @@ impl Material for Lambertian {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Metal {
-    color: Color,
-    fuzz: f64,
+pub struct Metal {
+    pub color: Color,
+    pub fuzz: f64,
 }
-
 impl Material for Metal {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
         let reflect = ray.way.reflect(hit.normal);
@@ -279,10 +259,9 @@ impl Material for Metal {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Glass {
-    ir: f64,
+pub struct Glass {
+    pub ir: f64,
 }
-
 impl Material for Glass {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
         let ref_ratio = if hit.front_face { 1. / self.ir } else { self.ir };

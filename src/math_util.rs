@@ -97,7 +97,7 @@ pub fn rand_in(min: f64, max: f64) -> f64 {
 pub fn rand() -> f64 {
     rand_in(0., 1.)
 }
-pub fn rand_unit_v3() -> V3 {
+pub fn rand_v3() -> V3 {
     let phi = rand_in(0., 2. * PI);
     let ctheta = rand_in(-1., 1.);
     let theta = ctheta.acos();
@@ -107,7 +107,7 @@ pub fn rand_unit_v3() -> V3 {
     V3(x, y, z)
 }
 pub fn rand_hemisphere(normal: V3) -> V3 {
-    let v = rand_unit_v3();
+    let v = rand_v3();
     if normal.dot(v) > 0. {
         v
     } else {
