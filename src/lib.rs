@@ -6,7 +6,7 @@ type Point = V3;
 type Color = V3;
 
 pub struct World {
-    objects: Vec<Geom>,
+    //objects: Vec<Geom>,
     camera: Camera,
 }
 struct Camera {
@@ -22,12 +22,13 @@ pub struct RenderOption {
 }
 impl World {
     pub fn new() -> World {
-        let objects = vec![Geom::Plain {
+        /*let objects = vec![Geom::Plain {
             origin: V3(0., 0., 0.),
             x: V3(1., 0., 0.),
             y: V3(0., 1., 0.),
             color: V3(0., 1., 0.),
         }];
+        */
         let camera = Camera {
             pos: V3(0., 0., 0.),
             center: V3(0., 0., -1.),
@@ -35,7 +36,7 @@ impl World {
             width: 2. * 16. / 9.,
             height: 2.,
         };
-        World { objects, camera }
+        World { /*  objects, */ camera }
     }
     pub fn render(&self, option: RenderOption) -> image::RgbImage {
         let mut buf = image::RgbImage::new(option.campus_width, option.campus_height);
@@ -64,8 +65,18 @@ impl World {
             + roll_y * camera.height * 0.5 * (y - 0.5);
         let ray_way = (ray_to - ray_pos).norm();
         let ray = Ray { pos: ray_pos, way: ray_way };
+
+        let sphere = Sphere { pos: V3(0., 0., -1.), radius: 0.1 };
+        let rw = camera.pos - sphere.pos;
+        let ra = ray.way.sq_len();
+        let rb = ray.way.dot(rw);
+        let rc = rw.sq_len() - sphere.radius;
+        let det = rb * rb - ra * rc;
+
         let t = 0.5 * (ray.way.1 + 1.);
-        return V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.);
+        let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.);
+        let sphere_color = V3(1., 0., 0.);
+        return if det >= 0. { sphere_color } else { back };
     }
 }
 
@@ -79,6 +90,8 @@ impl Ray {
         self.pos + self.way * k
     }
 }
-enum Geom {
-    Plain { origin: Point, x: Point, y: Point, color: Color },
+
+struct Sphere {
+    pos: Point,
+    radius: f64,
 }
