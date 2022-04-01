@@ -53,8 +53,8 @@ pub struct RenderOption {
 impl World {
     pub fn new() -> World {
         let material_ground = Rc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
-        let material_left = Rc::new(Metal { color: V3(0.7, 0.3, 0.3), fuzz: 0.01 });
-        let material_center = Rc::new(Metal { color: V3(0.8, 0.8, 0.8), fuzz: 0.3 });
+        let material_left = Rc::new(Glass { ir: 2.0 });
+        let material_center = Rc::new(Glass { ir: 10.0 });
         let material_right = Rc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
 
         let geom_ground = Box::new(Sphere {
@@ -117,8 +117,8 @@ impl World {
         let ray_to = camera.center
             + camera.roll * camera.width * 0.5 * (x - 0.5)
             + roll_y * camera.height * 0.5 * (y - 0.5);
-        let ray_way = (ray_to - ray_pos).norm();
-        let ray = Ray { pos: ray_pos, way: ray_way };
+        let ray_way = ray_to - ray_pos;
+        let ray = Ray { pos: ray_pos, way: ray_way.norm() };
         self.ray_color(ray, depth)
     }
     fn ray_color(&self, ray: Ray, depth: usize) -> Color {
@@ -267,5 +267,26 @@ impl Material for Metal {
         let way = reflect + rand_hemisphere(reflect) * self.fuzz;
         let ray = Ray { pos: hit.pos, way: way.norm() };
         (self.color, Some(ray))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Glass {
+    ir: f64,
+}
+
+impl Material for Glass {
+    fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
+        let ref_ratio = if hit.front_face { 1. / self.ir } else { self.ir };
+        let cos = -ray.way.dot(hit.normal);
+        let sin = (1. - cos * cos).sqrt();
+        let cannot_refracted = ref_ratio * sin > 1.;
+        let way = if cannot_refracted {
+            ray.way.reflect(hit.normal)
+        } else {
+            ray.way.refract(hit.normal, ref_ratio)
+        };
+        let ray = Ray { pos: hit.pos, way: way.norm() };
+        (V3(1., 1., 1.), Some(ray))
     }
 }

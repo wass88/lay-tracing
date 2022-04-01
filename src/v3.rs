@@ -81,4 +81,10 @@ impl V3 {
     pub fn reflect(self, normal: V3) -> V3 {
         self - normal * self.dot(normal) * 2.
     }
+    pub fn refract(self, normal: V3, etai: f64) -> V3 {
+        let cos = -self.dot(normal);
+        let prep = (self + normal * cos) * etai;
+        let para = -normal * (1. - prep.sq_len()).sqrt();
+        prep + para
+    }
 }
