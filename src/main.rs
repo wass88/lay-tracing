@@ -4,6 +4,7 @@ fn main() {
         campus_width: (256. * (16. / 9.)) as u32,
         campus_height: 256,
         samples: 5,
+        depth: 20,
     };
     world.render(option).save("test.png").unwrap();
 }

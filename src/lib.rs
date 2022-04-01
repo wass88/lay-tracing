@@ -47,21 +47,28 @@ struct Camera {
 pub struct RenderOption {
     pub campus_width: u32,
     pub campus_height: u32,
+    pub depth: usize,
     pub samples: usize,
 }
 impl World {
     pub fn new() -> World {
-        let material = Rc::new(Lambertian { albedo: V3(0.2, 0.8, 0.1) });
-        let objects = GeomList {
-            geoms: vec![
-                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4, material: material.clone() }),
-                Box::new(Sphere {
-                    pos: V3(0., -10. - 0.4, -1.),
-                    radius: -10.,
-                    material: material.clone(),
-                }),
-            ],
-        };
+        let material_ground = Rc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
+        let material_left = Rc::new(Metal { color: V3(0.7, 0.3, 0.3) });
+        let material_center = Rc::new(Metal { color: V3(0.8, 0.8, 0.8) });
+        let material_right = Rc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
+
+        let geom_ground = Box::new(Sphere {
+            pos: V3(0., -10. - 0.4, -1.),
+            radius: -10.,
+            material: material_ground,
+        });
+        let geom_left =
+            Box::new(Sphere { pos: V3(-0.8, 0., -1.), radius: 0.4, material: material_left });
+        let geom_center =
+            Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4, material: material_center });
+        let geom_right =
+            Box::new(Sphere { pos: V3(0.8, 0., -1.), radius: 0.4, material: material_right });
+        let objects = GeomList { geoms: vec![geom_left, geom_center, geom_right, geom_ground] };
         /*vec![Geom::Plain {
             origin: V3(0., 0., 0.),
             x: V3(1., 0., 0.),
@@ -90,6 +97,7 @@ impl World {
                         sx,
                         sy,
                         option.campus_width as f64 / option.campus_height as f64,
+                        option.depth,
                     );
                     total_color = total_color + color;
                 }
@@ -102,7 +110,7 @@ impl World {
         }
         return buf;
     }
-    fn pixel(&self, x: f64, y: f64, aspect: f64) -> Color {
+    fn pixel(&self, x: f64, y: f64, aspect: f64, depth: usize) -> Color {
         let camera = &self.camera;
         let ray_pos = camera.pos;
         let roll_y = (camera.center - camera.pos).cross(camera.roll);
@@ -111,7 +119,7 @@ impl World {
             + roll_y * camera.height * 0.5 * (y - 0.5);
         let ray_way = (ray_to - ray_pos).norm();
         let ray = Ray { pos: ray_pos, way: ray_way };
-        self.ray_color(ray, 3)
+        self.ray_color(ray, depth)
     }
     fn ray_color(&self, ray: Ray, depth: usize) -> Color {
         if depth <= 0 {
@@ -232,9 +240,9 @@ trait Material: std::fmt::Debug {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Lambertian {
-    albedo: Color,
+    color: Color,
 }
 impl Material for Lambertian {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
@@ -243,7 +251,19 @@ impl Material for Lambertian {
             way = hit.normal;
         }
         let ray = Ray { pos: hit.pos, way: way.norm() };
-        (self.albedo, Some(ray))
+        (self.color, Some(ray))
     }
 }
-struct Metal {}
+
+#[derive(Debug, Clone, Copy)]
+struct Metal {
+    color: Color,
+}
+
+impl Material for Metal {
+    fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
+        let mut way = ray.way.reflect(hit.normal);
+        let ray = Ray { pos: hit.pos, way: way.norm() };
+        (self.color, Some(ray))
+    }
+}

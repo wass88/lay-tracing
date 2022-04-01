@@ -76,6 +76,9 @@ impl V3 {
         self / self.len()
     }
     pub fn near_zero(self) -> bool {
-        self.sq_len() < 1e16
+        self.sq_len() < 1e-16
+    }
+    pub fn reflect(self, normal: V3) -> V3 {
+        self - normal * self.dot(normal) * 2.
     }
 }
