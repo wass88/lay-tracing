@@ -5,6 +5,7 @@ mod v3;
 use v3::V3;
 type Point = V3;
 type Color = V3;
+use std::f64::consts::PI;
 
 fn rand_in(min: f64, max: f64) -> f64 {
     use crate::rand::distributions::Distribution;
@@ -12,6 +13,15 @@ fn rand_in(min: f64, max: f64) -> f64 {
 }
 fn rand() -> f64 {
     rand_in(0., 1.)
+}
+fn rand_unit_v3() -> V3 {
+    let phi = rand_in(0., 2. * PI);
+    let ctheta = rand_in(-1., 1.);
+    let theta = ctheta.acos();
+    let x = theta.sin() * phi.cos();
+    let y = theta.sin() * phi.sin();
+    let z = theta.cos();
+    V3(x, y, z)
 }
 
 pub struct World {
@@ -34,8 +44,8 @@ impl World {
     pub fn new() -> World {
         let objects = GeomList {
             geoms: vec![
-                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.1 }),
-                Box::new(Sphere { pos: V3(0., -5., -4.), radius: 20. }),
+                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4 }),
+                Box::new(Sphere { pos: V3(0., -10. - 0.4, -1.), radius: -10. }),
             ],
         };
         /*vec![Geom::Plain {
@@ -78,7 +88,7 @@ impl World {
         }
         return buf;
     }
-    fn pixel(&self, x: f64, y: f64, aspect: f64) -> V3 {
+    fn pixel(&self, x: f64, y: f64, aspect: f64) -> Color {
         let camera = &self.camera;
         let ray_pos = camera.pos;
         let roll_y = (camera.center - camera.pos).cross(camera.roll);
@@ -87,16 +97,21 @@ impl World {
             + roll_y * camera.height * 0.5 * (y - 0.5);
         let ray_way = (ray_to - ray_pos).norm();
         let ray = Ray { pos: ray_pos, way: ray_way };
-
+        self.ray_color(ray, 3)
+    }
+    fn ray_color(&self, ray: Ray, depth: usize) -> Color {
+        if depth <= 0 {
+            return V3(0., 0., 0.);
+        }
         let hit = self.objects.hit(ray, 0.01, 5.);
         if let Some(hit) = hit {
-            let sphere_color = V3(hit.pos.0 + 0.5, hit.pos.1 + 0.5, hit.pos.2 + 0.5);
-            return sphere_color;
+            let way = hit.normal + rand_unit_v3();
+            self.ray_color(Ray { pos: hit.pos, way: way }, depth - 1) * 0.5
         } else {
             let t = 0.5 * (ray.way.1 + 1.);
-            let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.);
-            return back;
-        };
+            let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.) * t;
+            back
+        }
     }
 }
 
@@ -166,7 +181,7 @@ impl Geom for Sphere {
         let rw = ray.pos - self.pos;
         let ra = ray.way.sq_len();
         let rb = ray.way.dot(rw);
-        let rc = rw.sq_len() - self.radius;
+        let rc = rw.sq_len() - self.radius * self.radius;
         let det = rb * rb - ra * rc;
         if det < 0. {
             return None;
