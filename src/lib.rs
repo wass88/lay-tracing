@@ -6,7 +6,7 @@ type Point = V3;
 type Color = V3;
 
 pub struct World {
-    //objects: Vec<Geom>,
+    objects: GeomList,
     camera: Camera,
 }
 struct Camera {
@@ -22,13 +22,18 @@ pub struct RenderOption {
 }
 impl World {
     pub fn new() -> World {
-        /*let objects = vec![Geom::Plain {
+        let objects = GeomList {
+            geoms: vec![
+                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.1 }),
+                Box::new(Sphere { pos: V3(0., -5., -4.), radius: 20. }),
+            ],
+        };
+        /*vec![Geom::Plain {
             origin: V3(0., 0., 0.),
             x: V3(1., 0., 0.),
             y: V3(0., 1., 0.),
             color: V3(0., 1., 0.),
-        }];
-        */
+        }]*/
         let camera = Camera {
             pos: V3(0., 0., 0.),
             center: V3(0., 0., -1.),
@@ -36,7 +41,7 @@ impl World {
             width: 2. * 16. / 9.,
             height: 2.,
         };
-        World { /*  objects, */ camera }
+        World { objects, camera }
     }
     pub fn render(&self, option: RenderOption) -> image::RgbImage {
         let mut buf = image::RgbImage::new(option.campus_width, option.campus_height);
@@ -66,8 +71,7 @@ impl World {
         let ray_way = (ray_to - ray_pos).norm();
         let ray = Ray { pos: ray_pos, way: ray_way };
 
-        let sphere = Sphere { pos: V3(0., 0., -1.), radius: 0.1 };
-        let hit = sphere.hit(ray, 0.01, 5.);
+        let hit = self.objects.hit(ray, 0.01, 5.);
         if let Some(hit) = hit {
             let sphere_color = V3(hit.pos.0 + 0.5, hit.pos.1 + 0.5, hit.pos.2 + 0.5);
             return sphere_color;
@@ -95,10 +99,44 @@ struct HitRecord {
     pos: Point,
     normal: V3,
     distance: f64,
+    front_face: bool,
+}
+impl HitRecord {
+    fn new_normal(ray: Ray, pos: Point, normal: V3, distance: f64) -> HitRecord {
+        let front_face = ray.way.dot(normal) < 0.;
+        let normal = if front_face { normal } else { -normal };
+        HitRecord { pos, normal, distance, front_face }
+    }
 }
 
-trait Hittable {
-    fn hit(self, ray: Ray, d_min: f64, d_max: f64) -> HitRecord;
+trait Geom: std::fmt::Debug {
+    fn hit(&self, ray: Ray, d_min: f64, d_max: f64) -> Option<HitRecord>;
+}
+
+#[derive(Debug)]
+struct GeomList {
+    geoms: Vec<Box<dyn Geom>>,
+}
+impl Geom for GeomList {
+    fn hit(&self, ray: Ray, d_min: f64, d_max: f64) -> Option<HitRecord> {
+        let mut nearest: Option<HitRecord> = None;
+        for geom in &self.geoms {
+            if let Some(hit) = geom.hit(ray, d_min, d_max) {
+                if nearest.is_none() || hit.distance < nearest.unwrap().distance {
+                    nearest = Some(hit)
+                }
+            }
+        }
+        return nearest;
+    }
+}
+impl GeomList {
+    fn add(&mut self, geom: Box<dyn Geom>) {
+        self.geoms.push(geom)
+    }
+    fn clear(&mut self) {
+        self.geoms.clear()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -106,8 +144,8 @@ struct Sphere {
     pos: Point,
     radius: f64,
 }
-impl Sphere {
-    fn hit(self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+impl Geom for Sphere {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
         let rw = ray.pos - self.pos;
         let ra = ray.way.sq_len();
         let rb = ray.way.dot(rw);
@@ -128,6 +166,6 @@ impl Sphere {
         let distance = d;
         let pos = ray.at(distance);
         let normal = (pos - self.pos).norm();
-        Some(HitRecord { distance, pos, normal })
+        Some(HitRecord::new_normal(ray, pos, normal, distance))
     }
 }

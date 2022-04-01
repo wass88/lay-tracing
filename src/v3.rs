@@ -48,6 +48,12 @@ impl ops::Div<V3> for V3 {
         V3(x / a, y / b, z / c)
     }
 }
+impl ops::Neg for V3 {
+    type Output = V3;
+    fn neg(self) -> V3 {
+        self * -1.
+    }
+}
 impl V3 {
     pub fn len(self) -> f64 {
         self.sq_len().sqrt()
