@@ -23,6 +23,14 @@ fn rand_unit_v3() -> V3 {
     let z = theta.cos();
     V3(x, y, z)
 }
+fn rand_hemisphere(normal: V3) -> V3 {
+    let v = rand_unit_v3();
+    if normal.dot(v) > 0. {
+        v
+    } else {
+        -v
+    }
+}
 
 pub struct World {
     objects: GeomList,
@@ -103,10 +111,10 @@ impl World {
         if depth <= 0 {
             return V3(0., 0., 0.);
         }
-        let hit = self.objects.hit(ray, 0.01, 5.);
+        let hit = self.objects.hit(ray, 0.0001, 10.);
         if let Some(hit) = hit {
-            let way = hit.normal + rand_unit_v3();
-            self.ray_color(Ray { pos: hit.pos, way: way }, depth - 1) * 0.5
+            let way = hit.normal + rand_hemisphere(hit.normal);
+            self.ray_color(Ray { pos: hit.pos, way: way.norm() }, depth - 1) * 0.5
         } else {
             let t = 0.5 * (ray.way.1 + 1.);
             let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.) * t;
