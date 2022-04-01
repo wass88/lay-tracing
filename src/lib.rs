@@ -80,9 +80,9 @@ impl World {
                     total_color = total_color + color;
                 }
                 let V3(r, g, b) = total_color / (option.samples as f64);
-                let r = (r * 255.) as u8;
-                let g = (g * 255.) as u8;
-                let b = (b * 255.) as u8;
+                let r = (r.sqrt() * 255.) as u8;
+                let g = (g.sqrt() * 255.) as u8;
+                let b = (b.sqrt() * 255.) as u8;
                 buf.put_pixel(x, y, image::Rgb([r, g, b]))
             }
         }
