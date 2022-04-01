@@ -53,8 +53,8 @@ pub struct RenderOption {
 impl World {
     pub fn new() -> World {
         let material_ground = Rc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
-        let material_left = Rc::new(Metal { color: V3(0.7, 0.3, 0.3) });
-        let material_center = Rc::new(Metal { color: V3(0.8, 0.8, 0.8) });
+        let material_left = Rc::new(Metal { color: V3(0.7, 0.3, 0.3), fuzz: 0.01 });
+        let material_center = Rc::new(Metal { color: V3(0.8, 0.8, 0.8), fuzz: 0.3 });
         let material_right = Rc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
 
         let geom_ground = Box::new(Sphere {
@@ -258,11 +258,13 @@ impl Material for Lambertian {
 #[derive(Debug, Clone, Copy)]
 struct Metal {
     color: Color,
+    fuzz: f64,
 }
 
 impl Material for Metal {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
-        let mut way = ray.way.reflect(hit.normal);
+        let reflect = ray.way.reflect(hit.normal);
+        let way = reflect + rand_hemisphere(reflect) * self.fuzz;
         let ray = Ray { pos: hit.pos, way: way.norm() };
         (self.color, Some(ray))
     }
