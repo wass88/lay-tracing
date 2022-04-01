@@ -1,5 +1,4 @@
-extern crate image;
-extern crate rand;
+use std::sync::Arc;
 
 mod math_util;
 use math_util::*;
@@ -11,7 +10,6 @@ pub use math_util::V3;
 
 type Point = V3;
 type Color = V3;
-use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Camera {
@@ -84,27 +82,45 @@ impl World {
     pub fn add(&mut self, geom: Box<dyn Geom>) {
         self.objects.add(geom)
     }
-    pub fn render(&self, option: RenderOption) -> image::RgbImage {
+    pub async fn render(world: Arc<World>, option: Arc<RenderOption>) -> image::RgbImage {
         let mut buf = image::RgbImage::new(option.campus_width, option.campus_height);
-
-        for x in 0..option.campus_width {
-            eprint! {"\rLine: {} / {}", x, option.campus_width};
-            for y in 0..option.campus_height {
-                let mut total_color = V3(0., 0., 0.);
-                for _ in 0..option.samples {
-                    let sx = (x as f64 + rand()) / option.campus_width as f64;
-                    let sy = (y as f64 + rand()) / option.campus_height as f64;
-                    let color = self.pixel(sx, sy, option.depth);
-                    total_color = total_color + color;
-                }
-                let V3(r, g, b) = total_color / (option.samples as f64);
-                let r = (r.sqrt() * 255.) as u8;
-                let g = (g.sqrt() * 255.) as u8;
-                let b = (b.sqrt() * 255.) as u8;
-                buf.put_pixel(x, y, image::Rgb([r, g, b]))
+        use futures::prelude::*;
+        use futures::stream::FuturesUnordered;
+        let mut stream = (0..option.campus_width)
+            .map(|x| {
+                let world = world.clone();
+                let option = option.clone();
+                tokio::task::spawn_blocking(move || {
+                    (0..option.campus_height)
+                        .map(|y| (x, y, world.clone().job(x, y, option.clone())))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect::<FuturesUnordered<_>>();
+        let mut done = 0;
+        eprintln!("rendering...");
+        while let Some(Ok(ys)) = stream.next().await {
+            for (x, y, color) in ys {
+                buf.put_pixel(x, y, image::Rgb(color));
             }
+            done += 1;
+            eprint!("\rdone: {} / {}", done, option.campus_width);
         }
-        return buf;
+        buf
+    }
+    fn job(&self, x: u32, y: u32, option: Arc<RenderOption>) -> [u8; 3] {
+        let mut total_color = V3(0., 0., 0.);
+        for _ in 0..option.samples {
+            let sx = (x as f64 + rand()) / option.campus_width as f64;
+            let sy = (y as f64 + rand()) / option.campus_height as f64;
+            let color = self.pixel(sx, sy, option.depth);
+            total_color = total_color + color;
+        }
+        let V3(r, g, b) = total_color / (option.samples as f64);
+        let r = (r.sqrt() * 255.) as u8;
+        let g = (g.sqrt() * 255.) as u8;
+        let b = (b.sqrt() * 255.) as u8;
+        [r, g, b]
     }
     fn pixel(&self, x: f64, y: f64, depth: usize) -> Color {
         let camera = &self.camera;
@@ -147,7 +163,7 @@ pub struct HitRecord {
     normal: V3,
     distance: f64,
     front_face: bool,
-    material: Rc<dyn Material>,
+    material: Arc<dyn Material>,
 }
 impl HitRecord {
     fn new_normal(
@@ -155,7 +171,7 @@ impl HitRecord {
         pos: Point,
         normal: V3,
         distance: f64,
-        material: Rc<dyn Material>,
+        material: Arc<dyn Material>,
     ) -> HitRecord {
         let front_face = ray.way.dot(normal) < 0.;
         let normal = if front_face { normal } else { -normal };
@@ -163,7 +179,7 @@ impl HitRecord {
     }
 }
 
-pub trait Geom: std::fmt::Debug {
+pub trait Geom: std::fmt::Debug + Send + Sync {
     fn hit(&self, ray: Ray, d_min: f64, d_max: f64) -> Option<HitRecord>;
 }
 
@@ -197,7 +213,7 @@ impl GeomList {
 pub struct Sphere {
     pub pos: Point,
     pub radius: f64,
-    pub material: Rc<dyn Material>,
+    pub material: Arc<dyn Material>,
 }
 impl Geom for Sphere {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
@@ -225,7 +241,7 @@ impl Geom for Sphere {
     }
 }
 
-pub trait Material: std::fmt::Debug {
+pub trait Material: std::fmt::Debug + Send + Sync {
     fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>);
 }
 

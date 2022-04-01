@@ -1,7 +1,8 @@
 use lay_tracing::*;
-use std::rc::Rc;
+use std::sync::Arc;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let look_from = V3(1.1, 0.3, 0.2);
     let look_at = V3(0., 0., -0.5);
     let up = V3(0., -1., 0.);
@@ -11,10 +12,10 @@ fn main() {
 
     let mut world = World::new(camera);
 
-    let material_ground = Rc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
-    let material_left = Rc::new(Glass { ir: 2.0 });
-    let material_center = Rc::new(Metal { color: V3(0.8, 0.8, 0.8), fuzz: 0.01 });
-    let material_right = Rc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
+    let material_ground = Arc::new(Lambertian { color: V3(0.8, 0.8, 0.1) });
+    let material_left = Arc::new(Glass { ir: 2.0 });
+    let material_center = Arc::new(Metal { color: V3(0.8, 0.8, 0.8), fuzz: 0.01 });
+    let material_right = Arc::new(Lambertian { color: V3(0.8, 0.6, 0.2) });
 
     let geom_ground = Box::new(Sphere {
         pos: V3(0., -100. - 0.4, -1.),
@@ -36,11 +37,11 @@ fn main() {
     let childs = 100;
     for _ in 0..childs {
         let mat = rand();
-        let glass = Rc::new(Glass { ir: rand() + 1. });
-        let metal = Rc::new(Metal { color: rand_v3() * rand_v3(), fuzz: 0.1 });
+        let glass = Arc::new(Glass { ir: rand() + 1. });
+        let metal = Arc::new(Metal { color: rand_v3() * rand_v3(), fuzz: 0.1 });
         let c = V3(rand().sqrt(), rand().sqrt(), rand().sqrt());
-        let lamber = Rc::new(Lambertian { color: c });
-        let material: Rc<dyn Material> = if mat > 0.6 {
+        let lamber = Arc::new(Lambertian { color: c });
+        let material: Arc<dyn Material> = if mat > 0.6 {
             glass
         } else if mat > 0.3 {
             metal
@@ -61,5 +62,5 @@ fn main() {
         samples: 10,
         depth: 10,
     };
-    world.render(option).save("test.png").unwrap();
+    World::render(Arc::new(world), Arc::new(option)).await.save("test.png").unwrap();
 }

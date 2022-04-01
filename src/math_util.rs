@@ -91,7 +91,7 @@ impl V3 {
 }
 
 pub fn rand_in(min: f64, max: f64) -> f64 {
-    use crate::rand::distributions::Distribution;
+    use rand::distributions::Distribution;
     rand::distributions::Uniform::from(min..max).sample(&mut rand::thread_rng())
 }
 pub fn rand() -> f64 {
