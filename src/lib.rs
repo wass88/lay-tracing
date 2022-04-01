@@ -1,9 +1,18 @@
 extern crate image;
+extern crate rand;
 
 mod v3;
 use v3::V3;
 type Point = V3;
 type Color = V3;
+
+fn rand_in(min: f64, max: f64) -> f64 {
+    use crate::rand::distributions::Distribution;
+    rand::distributions::Uniform::from(min..max).sample(&mut rand::thread_rng())
+}
+fn rand() -> f64 {
+    rand_in(0., 1.)
+}
 
 pub struct World {
     objects: GeomList,
@@ -19,6 +28,7 @@ struct Camera {
 pub struct RenderOption {
     pub campus_width: u32,
     pub campus_height: u32,
+    pub samples: usize,
 }
 impl World {
     pub fn new() -> World {
@@ -48,11 +58,18 @@ impl World {
 
         for x in 0..option.campus_width {
             for y in 0..option.campus_height {
-                let V3(r, g, b) = self.pixel(
-                    x as f64 / option.campus_width as f64,
-                    y as f64 / option.campus_height as f64,
-                    option.campus_width as f64 / option.campus_height as f64,
-                );
+                let mut total_color = V3(0., 0., 0.);
+                for _ in 0..option.samples {
+                    let sx = (x as f64 + rand()) / option.campus_width as f64;
+                    let sy = (y as f64 + rand()) / option.campus_height as f64;
+                    let color = self.pixel(
+                        sx,
+                        sy,
+                        option.campus_width as f64 / option.campus_height as f64,
+                    );
+                    total_color = total_color + color;
+                }
+                let V3(r, g, b) = total_color / (option.samples as f64);
                 let r = (r * 255.) as u8;
                 let g = (g * 255.) as u8;
                 let b = (b * 255.) as u8;

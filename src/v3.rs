@@ -37,7 +37,7 @@ impl ops::Div<f64> for V3 {
     type Output = V3;
     fn div(self, a: f64) -> V3 {
         let V3(x, y, z) = self;
-        V3(x * a, y * a, z * a)
+        V3(x / a, y / a, z / a)
     }
 }
 impl ops::Div<V3> for V3 {
