@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-mod math_util;
+pub mod math_util;
+pub mod physics;
 use math_util::*;
 
 pub use math_util::rand;
@@ -11,7 +12,7 @@ pub use math_util::V3;
 type Point = V3;
 type Color = V3;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     pos: Point,
     lower_left: Point,
@@ -65,8 +66,10 @@ impl Camera {
         }
     }
 }
+
+#[derive(Debug)]
 pub struct World {
-    objects: GeomList,
+    pub objects: GeomList,
     camera: Camera,
 }
 pub struct RenderOption {
@@ -78,9 +81,6 @@ pub struct RenderOption {
 impl World {
     pub fn new(camera: Camera) -> World {
         World { objects: GeomList { geoms: vec![] }, camera }
-    }
-    pub fn add(&mut self, geom: Box<dyn Geom>) {
-        self.objects.add(geom)
     }
     pub async fn render(world: Arc<World>, option: Arc<RenderOption>) -> image::RgbImage {
         let mut buf = image::RgbImage::new(option.campus_width, option.campus_height);
@@ -98,7 +98,6 @@ impl World {
             })
             .collect::<FuturesUnordered<_>>();
         let mut done = 0;
-        eprintln!("rendering...");
         while let Some(Ok(ys)) = stream.next().await {
             for (x, y, color) in ys {
                 buf.put_pixel(x, y, image::Rgb(color));
@@ -185,7 +184,7 @@ pub trait Geom: std::fmt::Debug + Send + Sync {
 
 #[derive(Debug)]
 pub struct GeomList {
-    geoms: Vec<Box<dyn Geom>>,
+    pub geoms: Vec<Arc<dyn Geom>>,
 }
 impl Geom for GeomList {
     fn hit(&self, ray: Ray, d_min: f64, d_max: f64) -> Option<HitRecord> {
@@ -198,14 +197,6 @@ impl Geom for GeomList {
             }
         }
         return nearest;
-    }
-}
-impl GeomList {
-    pub fn add(&mut self, geom: Box<dyn Geom>) {
-        self.geoms.push(geom)
-    }
-    pub fn clear(&mut self) {
-        self.geoms.clear()
     }
 }
 
