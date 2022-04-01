@@ -39,10 +39,29 @@ pub struct World {
 }
 struct Camera {
     pos: Point,
-    center: Point,
-    roll: V3,
-    width: f64,
-    height: f64,
+    lower_left: Point,
+    horizontal: V3,
+    vertical: V3,
+}
+impl Camera {
+    fn new(look_from: Point, look_at: Point, up: V3, vfov: f64, aspect: f64) -> Camera {
+        let h = (vfov * 0.5).tan();
+        let height = 2. * h;
+        let width = aspect * height;
+        let w = (look_from - look_at).norm();
+        let u = up.norm().cross(w);
+        let v = w.cross(u);
+        let horizontal = u * width;
+        let vertical = v * height;
+        let lower_left = look_from - horizontal * 0.5 - vertical * 0.5 - w;
+        Camera { pos: look_from, horizontal, vertical, lower_left }
+    }
+    fn get_ray(&self, x: f64, y: f64) -> Ray {
+        Ray {
+            pos: self.pos,
+            way: self.lower_left + self.horizontal * x + self.vertical * y - self.pos,
+        }
+    }
 }
 pub struct RenderOption {
     pub campus_width: u32,
@@ -75,13 +94,8 @@ impl World {
             y: V3(0., 1., 0.),
             color: V3(0., 1., 0.),
         }]*/
-        let camera = Camera {
-            pos: V3(0., 0., 0.),
-            center: V3(0., 0., -1.),
-            roll: V3(1., 0., 0.),
-            width: 2. * 16. / 9.,
-            height: 2.,
-        };
+        let camera =
+            Camera::new(V3(3., 3., 1.), V3(0., 0., -1.), V3(0., -1., 0.), 0.3 * PI, 16. / 9.);
         World { objects, camera }
     }
     pub fn render(&self, option: RenderOption) -> image::RgbImage {
@@ -93,12 +107,7 @@ impl World {
                 for _ in 0..option.samples {
                     let sx = (x as f64 + rand()) / option.campus_width as f64;
                     let sy = (y as f64 + rand()) / option.campus_height as f64;
-                    let color = self.pixel(
-                        sx,
-                        sy,
-                        option.campus_width as f64 / option.campus_height as f64,
-                        option.depth,
-                    );
+                    let color = self.pixel(sx, sy, option.depth);
                     total_color = total_color + color;
                 }
                 let V3(r, g, b) = total_color / (option.samples as f64);
@@ -110,16 +119,9 @@ impl World {
         }
         return buf;
     }
-    fn pixel(&self, x: f64, y: f64, aspect: f64, depth: usize) -> Color {
+    fn pixel(&self, x: f64, y: f64, depth: usize) -> Color {
         let camera = &self.camera;
-        let ray_pos = camera.pos;
-        let roll_y = (camera.center - camera.pos).cross(camera.roll);
-        let ray_to = camera.center
-            + camera.roll * camera.width * 0.5 * (x - 0.5)
-            + roll_y * camera.height * 0.5 * (y - 0.5);
-        let ray_way = ray_to - ray_pos;
-        let ray = Ray { pos: ray_pos, way: ray_way.norm() };
-        self.ray_color(ray, depth)
+        self.ray_color(camera.get_ray(x, y), depth)
     }
     fn ray_color(&self, ray: Ray, depth: usize) -> Color {
         if depth <= 0 {
