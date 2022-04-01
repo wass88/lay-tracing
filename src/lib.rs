@@ -67,11 +67,9 @@ impl World {
         let ray = Ray { pos: ray_pos, way: ray_way };
 
         let sphere = Sphere { pos: V3(0., 0., -1.), radius: 0.1 };
-        let hit = sphere.hit(ray);
-        if hit >= 0. {
-            let sphere_color = V3(1., 0., 0.);
-            let hit_pos = ray.at(hit);
-            let sphere_color = V3(hit_pos.0 + 0.5, hit_pos.1 + 0.5, hit_pos.2 + 0.5);
+        let hit = sphere.hit(ray, 0.01, 5.);
+        if let Some(hit) = hit {
+            let sphere_color = V3(hit.pos.0 + 0.5, hit.pos.1 + 0.5, hit.pos.2 + 0.5);
             return sphere_color;
         } else {
             let t = 0.5 * (ray.way.1 + 1.);
@@ -93,21 +91,43 @@ impl Ray {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct HitRecord {
+    pos: Point,
+    normal: V3,
+    distance: f64,
+}
+
+trait Hittable {
+    fn hit(self, ray: Ray, d_min: f64, d_max: f64) -> HitRecord;
+}
+
+#[derive(Debug, Clone, Copy)]
 struct Sphere {
     pos: Point,
     radius: f64,
 }
 impl Sphere {
-    fn hit(self, ray: Ray) -> f64 {
+    fn hit(self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
         let rw = ray.pos - self.pos;
         let ra = ray.way.sq_len();
         let rb = ray.way.dot(rw);
         let rc = rw.sq_len() - self.radius;
         let det = rb * rb - ra * rc;
         if det < 0. {
-            -1.
-        } else {
-            (-rb - det.sqrt()) / ra
+            return None;
         }
+        let d0 = (-rb - det.sqrt()) / ra;
+        let d1 = (-rb + det.sqrt()) / ra;
+        let d = if t_min < d0 && d0 < t_max {
+            d0
+        } else if t_min < d1 && d1 < t_max {
+            d1
+        } else {
+            return None;
+        };
+        let distance = d;
+        let pos = ray.at(distance);
+        let normal = (pos - self.pos).norm();
+        Some(HitRecord { distance, pos, normal })
     }
 }
