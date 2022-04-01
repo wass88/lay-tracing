@@ -6,6 +6,7 @@ use v3::V3;
 type Point = V3;
 type Color = V3;
 use std::f64::consts::PI;
+use std::rc::Rc;
 
 fn rand_in(min: f64, max: f64) -> f64 {
     use crate::rand::distributions::Distribution;
@@ -50,10 +51,15 @@ pub struct RenderOption {
 }
 impl World {
     pub fn new() -> World {
+        let material = Rc::new(Lambertian { albedo: V3(0.2, 0.8, 0.1) });
         let objects = GeomList {
             geoms: vec![
-                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4 }),
-                Box::new(Sphere { pos: V3(0., -10. - 0.4, -1.), radius: -10. }),
+                Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4, material: material.clone() }),
+                Box::new(Sphere {
+                    pos: V3(0., -10. - 0.4, -1.),
+                    radius: -10.,
+                    material: material.clone(),
+                }),
             ],
         };
         /*vec![Geom::Plain {
@@ -113,8 +119,12 @@ impl World {
         }
         let hit = self.objects.hit(ray, 0.0001, 10.);
         if let Some(hit) = hit {
-            let way = hit.normal + rand_hemisphere(hit.normal);
-            self.ray_color(Ray { pos: hit.pos, way: way.norm() }, depth - 1) * 0.5
+            let (color, scatter) = hit.material.scatter(ray, &hit);
+            if let Some(scatter) = scatter {
+                color * self.ray_color(scatter, depth - 1)
+            } else {
+                V3(0., 0., 0.)
+            }
         } else {
             let t = 0.5 * (ray.way.1 + 1.);
             let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.) * t;
@@ -134,18 +144,25 @@ impl Ray {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct HitRecord {
     pos: Point,
     normal: V3,
     distance: f64,
     front_face: bool,
+    material: Rc<dyn Material>,
 }
 impl HitRecord {
-    fn new_normal(ray: Ray, pos: Point, normal: V3, distance: f64) -> HitRecord {
+    fn new_normal(
+        ray: Ray,
+        pos: Point,
+        normal: V3,
+        distance: f64,
+        material: Rc<dyn Material>,
+    ) -> HitRecord {
         let front_face = ray.way.dot(normal) < 0.;
         let normal = if front_face { normal } else { -normal };
-        HitRecord { pos, normal, distance, front_face }
+        HitRecord { pos, normal, distance, front_face, material }
     }
 }
 
@@ -162,7 +179,7 @@ impl Geom for GeomList {
         let mut nearest: Option<HitRecord> = None;
         for geom in &self.geoms {
             if let Some(hit) = geom.hit(ray, d_min, d_max) {
-                if nearest.is_none() || hit.distance < nearest.unwrap().distance {
+                if nearest.is_none() || hit.distance < nearest.as_ref().unwrap().distance {
                     nearest = Some(hit)
                 }
             }
@@ -179,10 +196,11 @@ impl GeomList {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Sphere {
     pos: Point,
     radius: f64,
+    material: Rc<dyn Material>,
 }
 impl Geom for Sphere {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
@@ -206,6 +224,26 @@ impl Geom for Sphere {
         let distance = d;
         let pos = ray.at(distance);
         let normal = (pos - self.pos).norm();
-        Some(HitRecord::new_normal(ray, pos, normal, distance))
+        Some(HitRecord::new_normal(ray, pos, normal, distance, self.material.clone()))
     }
 }
+
+trait Material: std::fmt::Debug {
+    fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>);
+}
+
+#[derive(Debug, Clone)]
+struct Lambertian {
+    albedo: Color,
+}
+impl Material for Lambertian {
+    fn scatter(&self, ray: Ray, hit: &HitRecord) -> (Color, Option<Ray>) {
+        let mut way = hit.normal + rand_hemisphere(hit.normal);
+        if way.near_zero() {
+            way = hit.normal;
+        }
+        let ray = Ray { pos: hit.pos, way: way.norm() };
+        (self.albedo, Some(ray))
+    }
+}
+struct Metal {}

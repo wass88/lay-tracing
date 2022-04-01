@@ -75,4 +75,7 @@ impl V3 {
     pub fn norm(self) -> V3 {
         self / self.len()
     }
+    pub fn near_zero(self) -> bool {
+        self.sq_len() < 1e16
+    }
 }
