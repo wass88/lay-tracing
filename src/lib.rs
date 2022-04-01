@@ -67,16 +67,17 @@ impl World {
         let ray = Ray { pos: ray_pos, way: ray_way };
 
         let sphere = Sphere { pos: V3(0., 0., -1.), radius: 0.1 };
-        let rw = camera.pos - sphere.pos;
-        let ra = ray.way.sq_len();
-        let rb = ray.way.dot(rw);
-        let rc = rw.sq_len() - sphere.radius;
-        let det = rb * rb - ra * rc;
-
-        let t = 0.5 * (ray.way.1 + 1.);
-        let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.);
-        let sphere_color = V3(1., 0., 0.);
-        return if det >= 0. { sphere_color } else { back };
+        let hit = sphere.hit(ray);
+        if hit >= 0. {
+            let sphere_color = V3(1., 0., 0.);
+            let hit_pos = ray.at(hit);
+            let sphere_color = V3(hit_pos.0 + 0.5, hit_pos.1 + 0.5, hit_pos.2 + 0.5);
+            return sphere_color;
+        } else {
+            let t = 0.5 * (ray.way.1 + 1.);
+            let back = V3(1., 1., 1.) * (1.0 - t) + V3(0.5, 0.7, 1.);
+            return back;
+        };
     }
 }
 
@@ -91,7 +92,22 @@ impl Ray {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Sphere {
     pos: Point,
     radius: f64,
+}
+impl Sphere {
+    fn hit(self, ray: Ray) -> f64 {
+        let rw = ray.pos - self.pos;
+        let ra = ray.way.sq_len();
+        let rb = ray.way.dot(rw);
+        let rc = rw.sq_len() - self.radius;
+        let det = rb * rb - ra * rc;
+        if det < 0. {
+            -1.
+        } else {
+            (-rb - det.sqrt()) / ra
+        }
+    }
 }
