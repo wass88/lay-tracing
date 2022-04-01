@@ -1,37 +1,12 @@
 extern crate image;
 extern crate rand;
 
-mod v3;
-use v3::V3;
+mod math_util;
+use math_util::*;
+
 type Point = V3;
 type Color = V3;
-use std::f64::consts::PI;
 use std::rc::Rc;
-
-fn rand_in(min: f64, max: f64) -> f64 {
-    use crate::rand::distributions::Distribution;
-    rand::distributions::Uniform::from(min..max).sample(&mut rand::thread_rng())
-}
-fn rand() -> f64 {
-    rand_in(0., 1.)
-}
-fn rand_unit_v3() -> V3 {
-    let phi = rand_in(0., 2. * PI);
-    let ctheta = rand_in(-1., 1.);
-    let theta = ctheta.acos();
-    let x = theta.sin() * phi.cos();
-    let y = theta.sin() * phi.sin();
-    let z = theta.cos();
-    V3(x, y, z)
-}
-fn rand_hemisphere(normal: V3) -> V3 {
-    let v = rand_unit_v3();
-    if normal.dot(v) > 0. {
-        v
-    } else {
-        -v
-    }
-}
 
 pub struct World {
     objects: GeomList,
@@ -42,24 +17,51 @@ struct Camera {
     lower_left: Point,
     horizontal: V3,
     vertical: V3,
+    u: V3,
+    v: V3,
+    w: V3,
+    lens_radius: f64,
 }
 impl Camera {
-    fn new(look_from: Point, look_at: Point, up: V3, vfov: f64, aspect: f64) -> Camera {
+    fn new(
+        look_from: Point,
+        look_at: Point,
+        up: V3,
+        vfov: f64,
+        aspect: f64,
+        aperture: f64,
+        focus_dist: f64,
+    ) -> Camera {
         let h = (vfov * 0.5).tan();
         let height = 2. * h;
         let width = aspect * height;
+
         let w = (look_from - look_at).norm();
         let u = up.norm().cross(w);
         let v = w.cross(u);
-        let horizontal = u * width;
-        let vertical = v * height;
-        let lower_left = look_from - horizontal * 0.5 - vertical * 0.5 - w;
-        Camera { pos: look_from, horizontal, vertical, lower_left }
+
+        let horizontal = u * width * focus_dist;
+        let vertical = v * height * focus_dist;
+        let lower_left = look_from - horizontal * 0.5 - vertical * 0.5 - w * focus_dist;
+
+        Camera {
+            pos: look_from,
+            horizontal,
+            vertical,
+            lower_left,
+            u,
+            v,
+            w,
+            lens_radius: aperture * 0.5,
+        }
     }
     fn get_ray(&self, x: f64, y: f64) -> Ray {
+        let lens_disk = rand_disk() * self.lens_radius;
+        let offset = self.u * lens_disk.0 + self.v * lens_disk.1;
         Ray {
-            pos: self.pos,
-            way: self.lower_left + self.horizontal * x + self.vertical * y - self.pos,
+            pos: self.pos + offset,
+            way: (self.lower_left + self.horizontal * x + self.vertical * y - self.pos - offset)
+                .norm(),
         }
     }
 }
@@ -82,11 +84,11 @@ impl World {
             material: material_ground,
         });
         let geom_left =
-            Box::new(Sphere { pos: V3(-0.8, 0., -1.), radius: 0.4, material: material_left });
+            Box::new(Sphere { pos: V3(0.8, 0., -1.), radius: 0.4, material: material_left });
         let geom_center =
             Box::new(Sphere { pos: V3(0., 0., -1.), radius: 0.4, material: material_center });
         let geom_right =
-            Box::new(Sphere { pos: V3(0.8, 0., -1.), radius: 0.4, material: material_right });
+            Box::new(Sphere { pos: V3(-0.8, 0., -1.), radius: 0.4, material: material_right });
         let objects = GeomList { geoms: vec![geom_left, geom_center, geom_right, geom_ground] };
         /*vec![Geom::Plain {
             origin: V3(0., 0., 0.),
@@ -94,8 +96,12 @@ impl World {
             y: V3(0., 1., 0.),
             color: V3(0., 1., 0.),
         }]*/
-        let camera =
-            Camera::new(V3(3., 3., 1.), V3(0., 0., -1.), V3(0., -1., 0.), 0.3 * PI, 16. / 9.);
+        let look_from = V3(1.2, 0.9, 0.7);
+        let look_at = V3(0., 0., -1.);
+        let up = V3(0., -1., 0.);
+        let focus_dist = (look_from - look_at).len();
+        let aperture = 0.8;
+        let camera = Camera::new(look_from, look_at, up, 0.3 * PI, 16. / 9., aperture, focus_dist);
         World { objects, camera }
     }
     pub fn render(&self, option: RenderOption) -> image::RgbImage {
@@ -283,6 +289,7 @@ impl Material for Glass {
         let cos = -ray.way.dot(hit.normal);
         let sin = (1. - cos * cos).sqrt();
         let cannot_refracted = ref_ratio * sin > 1.;
+
         let way = if cannot_refracted {
             ray.way.reflect(hit.normal)
         } else {

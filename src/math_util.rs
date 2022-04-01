@@ -1,5 +1,6 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct V3(pub f64, pub f64, pub f64);
+pub static PI: f64 = std::f64::consts::PI;
 
 use std::ops;
 impl ops::Add<V3> for V3 {
@@ -87,4 +88,34 @@ impl V3 {
         let para = -normal * (1. - prep.sq_len()).sqrt();
         prep + para
     }
+}
+
+pub fn rand_in(min: f64, max: f64) -> f64 {
+    use crate::rand::distributions::Distribution;
+    rand::distributions::Uniform::from(min..max).sample(&mut rand::thread_rng())
+}
+pub fn rand() -> f64 {
+    rand_in(0., 1.)
+}
+pub fn rand_unit_v3() -> V3 {
+    let phi = rand_in(0., 2. * PI);
+    let ctheta = rand_in(-1., 1.);
+    let theta = ctheta.acos();
+    let x = theta.sin() * phi.cos();
+    let y = theta.sin() * phi.sin();
+    let z = theta.cos();
+    V3(x, y, z)
+}
+pub fn rand_hemisphere(normal: V3) -> V3 {
+    let v = rand_unit_v3();
+    if normal.dot(v) > 0. {
+        v
+    } else {
+        -v
+    }
+}
+pub fn rand_disk() -> V3 {
+    let r = rand().sqrt();
+    let theta = rand() * 2.0 * PI;
+    V3(r * theta.cos(), r * theta.sin(), 0.)
 }
